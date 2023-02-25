@@ -1,0 +1,49 @@
+{
+  "name": "ts-node-cli-tools",
+  "type": "module",
+  "version": "0.0.1",
+  "description": "Typescript Node CLI Tools",
+  "author": "aceslick911",
+  "license": "MIT",
+  "repository": "https://github.com/aceslick911/ts-node-cli-tools",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "lint": "eslint . --ext .ts --fix",
+    "build": "tsc || true",
+    "postinstall": "patch-package && turbo lint build",
+    "cleanup:web": "rimraf ../web-build/*",
+    "bump": "npm version patch"
+  },
+  "exports": {
+    "./package.json": "./package.json",
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "dependencies": {
+    "bandersnatch": "^1.11.1",
+    "chalk": "^5.2.0",
+    "clear": "^0.1.0",
+    "figlet": "^1.5.2",
+    "inquirer": "^9.1.4",
+    "patch-package": "^6.5.1",
+    "rimraf": "^4.1.2",
+    "terminal-kit": "^3.0.0",
+    "yargs": "^17.6.2"
+  },
+  "devDependencies": {
+    "turbo": "^1.8.1",
+    "@babel/core": "^7.21.0",
+    "@babel/eslint-parser": "^7.19.1",
+    "@types/figlet": "^1.5.5",
+    "@types/inquirer": "^9.0.3",
+    "@types/terminal-kit": "^2.5.1",
+    "@typescript-eslint/eslint-plugin": "^5.53.0",
+    "@typescript-eslint/parser": "^5.53.0",
+    "eslint": "^8.34.0",
+    "typescript": "^4.9.5"
+  }
+}

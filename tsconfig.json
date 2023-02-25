@@ -1,0 +1,33 @@
+{
+  "root": true,
+  "env": {
+    "node": true
+  },
+
+  "rules": {
+    "import/extensions": ["error", "ignorePackages"],
+    "import/no-unresolved": "off"
+    },
+  "include": [
+    "./src/*",
+  ],
+  "exclude": ["node_modules","dist"],
+  "compilerOptions": {
+    "skipLibCheck": true,
+    "noEmitOnError": false,
+    "target": "es2017",
+    "module": "node16",
+    "lib": ["es2017"],
+    "declaration": true,
+
+    "strict": false,
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+    "moduleResolution": "node16",
+    "noEmitHelpers": false,
+    "noImplicitAny": false,
+
+    "outDir": "./dist/",
+    "types": ["@types/terminal-kit"]
+  }
+}
