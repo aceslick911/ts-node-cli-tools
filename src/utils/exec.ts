@@ -12,11 +12,15 @@ interface IRunAsyncCommandProps {
   /// folder to run the command in
   cwd?: string;
   title?: string;
+  hideOutput?: boolean;
 }
 
-const childExecFile = async (
-  props: IRunAsyncCommandProps,
-): Promise<{ code: number; data: string }> => {
+interface IManagedProcess {
+  promise: Promise<{ code: number; data: string }>;
+  kill: () => void;
+}
+
+const childExecFile = (props: IRunAsyncCommandProps): IManagedProcess => {
   const { command, args, onData, onErr, cwd } = props;
 
   const resolvedCWD =
@@ -29,59 +33,67 @@ const childExecFile = async (
   const errors = [];
   const output = [];
 
+  const managedProcess = {
+    child: null,
+    kill: () => {
+      logger.error('KILLED!1');
+      if (managedProcess.child) {
+        logger.error('KILLED!2');
+        managedProcess.child.kill('SIGINT');
+        managedProcess.child = null;
+      }
+    },
+  };
+
   try {
-    return await new Promise<{ code: number; data: string }>(
-      (resolve, reject) => {
-        const child = execFile(command, args, {
-          cwd: resolvedCWD,
-        });
+    return {
+      promise: new Promise<{ code: number; data: string }>(
+        (resolve, reject) => {
+          managedProcess.child = execFile(command, args, {
+            cwd: resolvedCWD,
+          });
 
-        child.stderr.addListener('data', data => {
-          errors.push(data);
-          if (onErr) {
-            onErr(data);
-          } else {
-            logger.warn(data + '\n');
-          }
-        });
+          managedProcess.child.stderr.addListener('data', data => {
+            errors.push(data);
+            if (onErr) {
+              onErr(data);
+            } else {
+              logger.warn(data + '\n');
+            }
+          });
 
-        child.stdout.addListener('data', data => {
-          output.push(data);
-          if (onData) {
-            onData(data);
-          } else {
-            logger.log(text.italic(data.trim()));
-          }
-        });
+          managedProcess.child.stdout.addListener('data', data => {
+            output.push(data);
+            if (onData) {
+              onData(data);
+            } else {
+              if (CONST.VERBOSE && props.hideOutput !== true) {
+                logger.log(text.italic(data.trim()));
+              } else {
+                logger.log(
+                  text.italic(
+                    `${data.trim().split('\n').length} output lines hidden.`,
+                  ),
+                );
+              }
+            }
+          });
 
-        child.on('close', code => {
-          // logger.log(`\n${commandDesc} finished code:`, code); //, '\n');
-
-          if (code !== 0) {
-            reject(code);
-          } else {
-            resolve({ code: 0, data: output.join('\n') });
-          }
-        });
-
-        // child.stderr.addListener('readable', data => {
-        //   const val = child.stderr.read();
-
-        //   console.log(JSON.stringify(val));
-        //   errors.push(val);
-        //   if (onErr) {
-        //     onErr(val);
-        //   } else {
-        //     logger.warn(val + '\n');
-        //   }
-        // });
-      },
-    );
+          managedProcess.child.on('close', code => {
+            if (code !== 0) {
+              reject(code);
+            } else {
+              resolve({ code: 0, data: output.join('\n') });
+            }
+          });
+        },
+      ),
+      kill: managedProcess.kill,
+    };
   } catch (err) {
     const msg = `Exited ${err} with error for command: ${commandDesc} ${title} 
 Errors:
 ${errors.join('\n')}`;
-
     logger.error(msg);
     throw new Error(msg);
   }
@@ -91,39 +103,46 @@ ${errors.join('\n')}`;
 export const runAsyncCommand = (
   props: IRunAsyncCommandProps,
 ): Promise<string> => {
-  logger.stack.pop();
-
-  const commandString = `${text.dim(props.cwd || '')}> ${text.strong(
-    props.command,
-  )}`;
-
-  const argList = props.args
-    ? props.args.map(line => ' ' + text.underline(line))
-    : [];
-
-  const argSpaceString = argList.join('');
-
-  const indentDesc =
-    text.width(commandString + argSpaceString) < CONST.terminalWidth
-      ? `${commandString}${argSpaceString}`
-      : `${commandString} ${argList.join(' \\ \n')}`;
-
-  logger.increaseIndent(`${indentDesc}`);
-  const parentMethod = logger.stack.pop();
-  return childExecFile(props).then(({ code, data }) => {
-    logger.stack.pop();
-    if (data.trim().length > 0) {
-      logger.indentLine('├');
-    }
-    logger.log(
-      `${code === 0 ? '✅ ' : '🛑 '}${code}${
-        data ? ' ➡️  ' + text.italic(data.trim()) : ''
-      }`,
-    );
-
-    logger.decreaseIndent();
-    logger.stack.push(parentMethod);
-
-    return data;
+  logger.startCommand({
+    cwd: props.cwd,
+    command: props.command,
+    args: props.args,
   });
+  const childProcess = childExecFile(props);
+
+  return childProcess.promise.then(({ code, data }) =>
+    logger.endCommand({
+      output: data,
+      exitCode: code,
+      hideOutput: props.hideOutput,
+    }),
+  );
 };
+
+/** Executes a command and returns the output async */
+export const runAsyncCommandManaged = (
+  props: IRunAsyncCommandProps,
+): Promise<IManagedProcess> =>
+  new Promise((resolve, reject) => {
+    logger.startCommand({
+      cwd: props.cwd,
+      command: props.command,
+      args: props.args,
+    });
+    const childProcess = childExecFile(props);
+
+    resolve(childProcess);
+
+    childProcess.promise
+      .then(({ code, data }) => {
+        logger.endCommand({
+          output: data,
+          exitCode: code,
+          hideOutput: props.hideOutput,
+        });
+      })
+      .catch(err => {
+        logger.error(err);
+        reject(err);
+      });
+  });

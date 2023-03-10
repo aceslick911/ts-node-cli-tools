@@ -25,7 +25,6 @@
     "esModuleInterop": true,
     "moduleResolution": "node16",
     "noEmitHelpers": false,
-    "noImplicitAny": false,
 
     "outDir": "./dist/",
     "types": ["@types/terminal-kit"]

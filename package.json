@@ -11,9 +11,8 @@
   "types": "./dist/index.d.ts",
   "scripts": {
     "lint": "eslint . --ext .ts --fix",
-    "build": "tsc || true",
+    "build": "tsc && true && turbo lint",
     "postinstall": "patch-package && turbo lint build",
-    "cleanup:web": "rimraf ../web-build/*",
     "bump": "npm version patch"
   },
   "exports": {
@@ -27,23 +26,29 @@
     "bandersnatch": "^1.11.1",
     "chalk": "^5.2.0",
     "clear": "^0.1.0",
+    "debug": "^4.3.4",
     "figlet": "^1.5.2",
     "inquirer": "^9.1.4",
+    "lodash": "^4.17.21",
     "patch-package": "^6.5.1",
+    "puppeteer": "^19.7.3",
     "rimraf": "^4.1.2",
+    "simple-git": "^3.17.0",
     "terminal-kit": "^3.0.0",
+    "typescript": "^4.9.5",
     "yargs": "^17.6.2"
   },
   "devDependencies": {
-    "turbo": "^1.8.1",
     "@babel/core": "^7.21.0",
     "@babel/eslint-parser": "^7.19.1",
     "@types/figlet": "^1.5.5",
     "@types/inquirer": "^9.0.3",
+    "@types/lodash": "^4.14.191",
     "@types/terminal-kit": "^2.5.1",
     "@typescript-eslint/eslint-plugin": "^5.53.0",
     "@typescript-eslint/parser": "^5.53.0",
     "eslint": "^8.34.0",
+    "turbo": "^1.8.1",
     "typescript": "^4.9.5"
   }
 }

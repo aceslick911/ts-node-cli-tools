@@ -4,7 +4,7 @@ import { text } from './text.js';
 import terminal from 'terminal-kit';
 const term = terminal.terminal;
 
-export const safeStringify = (obj) => {
+export const safeStringify = (obj: unknown) => {
   if (!obj) return '';
   try {
     if (Array.isArray(obj)) {
@@ -21,27 +21,22 @@ export const safeStringify = (obj) => {
 /** Output Logging utilities */
 export const logger = {
   stack: [] as string[],
+  stacks: () =>
+    //logger.stack.join('.') + '!' + '\n' +
+    '│'.repeat(Math.max(0, logger.stack.length - 1)),
   indentString: (noBar?: boolean) =>
-    (logger.stack.length > 1 ? ' '.repeat(logger.stack.length - 1) : '') +
-    (noBar === true
-      ? logger.stack.length > 1
-        ? '1'
-        : ''
-      : term.str.dim(logger.stack.length === 0 ? '│ ' : '│ ')),
+    term.str.dim(
+      (logger.stacks() || '') + (noBar === true ? '' : '' + logger.stacks()),
+    ) as unknown as string,
+  dimChar: (text: string) => term.str.dim(text),
   increaseIndent: (indentName?: string) => {
+    logger.stack.push(indentName);
     if (indentName) {
       logger.indentLine('╭');
 
-      term(
-        logger.indentString(true) +
-          term.str.dim('│') +
-          indentName +
-          //term.str.bold(indentName) +
-          '\n',
-      );
+      term(logger.indentString(true) + term.str.dim('│') + indentName + '\n');
       logger.indentLine('├');
     }
-    logger.stack.push(indentName);
   },
   indentLine: (prefix?: string) => {
     term(
@@ -54,40 +49,57 @@ export const logger = {
     );
   },
   decreaseIndent: (closer?: string) => {
+    logger.indentLine();
     logger.stack.pop();
     if (closer) {
       logger.log(closer);
     }
-    logger.indentLine();
   },
 
   indented: <T>(name: string, fn: () => Promise<T>) => {
     logger.increaseIndent(name);
+    const starTime = Date.now();
     return new Promise<T>((resolve, reject) => {
       return (typeof fn === 'function' ? fn() : fn)
         .then(val => {
-          logger.decreaseIndent();
+          logger.decreaseIndent(
+            text.dim(`✔️  ${name} (${(Date.now() - starTime) / 1000}s)`),
+          );
           resolve(val);
         })
         .catch(err => {
-          logger.decreaseIndent();
+          logger.decreaseIndent(
+            text.dim(`🔴 ${name} (${(Date.now() - starTime) / 1000}s)`),
+          );
           reject(err);
         });
     });
   },
 
-  // /** No new line */
-  // // print: (text: string, ...args) => {
-  // //   term(`${logger.indentString()}${text + safeStringify(args)}`);
-  // // },
+  /** With New line */
+  print: (text: string, ...args) => {
+    const lines = `${text + safeStringify(args)}`
+      .split(/\n|\r/)
+      .filter(val => val !== '' && val !== ' ');
+    lines.forEach((line, index) =>
+      term(`${line}${index !== lines.length - 1 ? '\n' : '\n'}`),
+    );
+  },
 
+  /** With New line */
+  println: (text: string, ...args) => {
+    const line = `${text + safeStringify(args)}`;
+
+    term(`${logger.indentString(true)}${logger.dimChar('│')}${line}\n`);
+  },
   /** With New line */
   log: (text: string, ...args) => {
     const lines = `${text + safeStringify(args)}`
       .split(/\n|\r/)
       .filter(val => val !== '' && val !== ' ');
-    lines.forEach(line => term(`${logger.indentString()}${line}\n`));
-    // term(`${logger.indentString()}\n`)
+    lines.forEach(line =>
+      term(`${logger.indentString(true)}${logger.dimChar('│')}${line}\n`),
+    );
   },
 
   error: (text: string, ...args) =>
@@ -127,17 +139,24 @@ export const logger = {
     name: string,
     variables: {
       option: string;
-      value: string;
-      description: string;
+      value: unknown;
+      description?: string;
     }[],
   ) => {
     // CLI Parameters
-    logger.log(`
-${text.strong('CLI Command:')}
-yarn cli ${name} \\
-${variables.map(variable => `--${variable.option}=${variable.value}`).join(` \\
-`)}
-`);
+    logger.print(`
+${text.strong('\nCLI Command:')}
+yarn bema ${name} \\
+${variables
+  .map(
+    variable =>
+      `--${variable.option}=${
+        typeof variable.value === 'string' //&& variable.value.includes(' ')
+          ? `"${variable.value.replace(/\\/g, '\\\\')}"`
+          : variable.value
+      }`,
+  )
+  .join(' \\\n')}\n\n`);
 
     //Table
     CONST.ci
@@ -149,7 +168,7 @@ ${variables.map(variable => `--${variable.option}=${variable.value}`).join(` \\
               variable =>
                 [
                   text.strong(variable.option),
-                  text.strong(variable.value),
+                  text.strong(variable.value?.toString() || ''),
                 ] as string[],
             ),
           ],
@@ -176,6 +195,81 @@ ${variables.map(variable => `--${variable.option}=${variable.value}`).join(` \\
       tables.cropDisplay,
     );
   },
+
+  formatOneLineCommand: (props: {
+    cwd: string;
+    command: string;
+    args: string[];
+  }) => {
+    const commandStringOneline = `${text.dim(props.cwd || '')}> ${text.strong(
+      props.command,
+    )}`;
+
+    const argList1String = (
+      props.args ? props.args.map(line => text.underline(line)) : []
+    ).join(' ');
+
+    return `${commandStringOneline} ${argList1String}`;
+  },
+
+  formatMultiLineCommand: (props: {
+    cwd: string;
+    command: string;
+    args: string[];
+  }) => {
+    const firstArg = props.args.length > 0 ? props.args[0] : '';
+    const commandString1 = `${text.dim(props.cwd || '')}>`;
+    const commandString2 = `${text.strong(props.command)} ${text.underline(
+      firstArg,
+    )}`;
+
+    const argList2 = props.args
+      ? props.args
+          .map((line, index) => (index == 0 ? '' : ' ' + text.underline(line)))
+          .filter(line => line.length > 0)
+      : [];
+
+    const line2Spacer = ' '.repeat(
+      logger.stack.length +
+        text.width(commandString1) +
+        text.width(commandString2) -
+        text.width(firstArg) +
+        1,
+    );
+
+    return `${commandString1} ${commandString2} \\\n${line2Spacer}${argList2.join(
+      ` \\\n${line2Spacer}`,
+    )}`;
+  },
+
+  startCommand: (props: { cwd: string; command: string; args: string[] }) => {
+    const commandStringOneline = logger.formatOneLineCommand(props);
+    if (text.width(commandStringOneline) < CONST.terminalWidth) {
+      logger.increaseIndent(commandStringOneline);
+    } else {
+      const commandStringMultiline = logger.formatMultiLineCommand(props);
+      logger.increaseIndent(commandStringMultiline);
+    }
+  },
+  endCommand: (props: {
+    output: string;
+    exitCode: number;
+    hideOutput: boolean;
+  }) => {
+    if (props.output.trim().length > 0) {
+      logger.indentLine('├');
+    }
+    logger.log(
+      `${props.exitCode === 0 ? '✅ ' : '🛑 '}${props.exitCode}${
+        props.output && props.hideOutput !== true
+          ? ' ➡️  ' + text.italic(props.output.trim())
+          : ''
+      }`,
+    );
+
+    logger.decreaseIndent();
+    return props.output;
+  },
 };
 
 export const drawImage = (path: string) => {
@@ -188,7 +282,6 @@ export const drawImage = (path: string) => {
 };
 
 const useProgress = false;
-
 const fakeProgressBar = {
   update: () => {},
   stop: () => {},

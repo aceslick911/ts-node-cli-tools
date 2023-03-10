@@ -1,5 +1,5 @@
 import figlet from 'figlet';
-import terminal, { Terminal } from 'terminal-kit';
+import terminal from 'terminal-kit';
 const term = terminal.terminal;
 
 import { CONST } from '../consts.js';
@@ -31,7 +31,7 @@ export const text = {
     const output = data
       .split('\n')
       .map(line => line.substring(0, CONST.terminalWidth - padding))
-      .join('\n');
+      .join('');
 
     return output;
   },

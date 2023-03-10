@@ -20,8 +20,7 @@ const app = program({
 });
 
 const run = async () => {
-  app
-    .description(await text.title('TS-CLI'))
+  app.description(await text.title('TS-CLI'));
 
   // Add  commands here:
 

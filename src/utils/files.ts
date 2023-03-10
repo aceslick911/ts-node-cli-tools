@@ -27,7 +27,6 @@ export const writeTextFile = (
   data: string,
   preview?: RegExp,
 ) => {
-  // logger.log('writeTextFile', relativePath);
   return new Promise((resolve, reject) => {
     fs.writeFile(getRelativePath(relativePath), data, 'utf8', err => {
       if (err) {
@@ -63,7 +62,7 @@ export const updatePackageHomepage = (homepage: string) =>
             reject(err);
             return;
           }
-          logger.log('homepage set to', homepage);
+          logger.log('homepage set to: ', homepage);
           resolve(true);
         },
       );
@@ -74,7 +73,7 @@ export const deleteFile = (APP_CONFIG_FILENAME: string, throwError?: boolean) =>
   new Promise((resolve, reject) => {
     try {
       fs.unlinkSync(APP_CONFIG_FILENAME);
-      logger.log('Deleted file:', APP_CONFIG_FILENAME);
+      logger.log('Deleted file: ', APP_CONFIG_FILENAME);
       resolve(true);
     } catch (e) {
       if (throwError) {
@@ -84,7 +83,7 @@ export const deleteFile = (APP_CONFIG_FILENAME: string, throwError?: boolean) =>
         );
         reject(e);
       } else {
-        logger.log('Skipped deleting file:', APP_CONFIG_FILENAME);
+        logger.log('Skipped deleting file: ', APP_CONFIG_FILENAME);
         resolve(true);
       }
     }
@@ -102,11 +101,11 @@ export const copyFile = (
       const target = getRelativePath(targetRelativePath);
       try {
         if (fs.existsSync(target) && !override) {
-          logger.log('Skipped copying file:', source);
+          logger.log('Skipped copying file: ', source);
           resolve(true);
         } else {
           fs.copyFileSync(source, target);
-          logger.log('Copied file:', source);
+          logger.log('Copied file: ', source);
           if (preview) {
             previewFile(targetRelativePath, preview).then(() => resolve(true));
           } else {
@@ -129,14 +128,15 @@ export const copyFile = (
     }
   });
 
-export const regexReplaceInFile = async(
+export const regexReplaceInFile = (
   relativePath: string,
   reg: RegExp,
   replace: string,
-) =>{
+) =>
+  new Promise<string>(async (resolve, reject) => {
     try {
       const target = getRelativePath(relativePath);
- 
+      try {
         const data = await readTextFile(target);
 
         const result = data.replace(reg, replace);
@@ -148,17 +148,24 @@ export const regexReplaceInFile = async(
 
         renderRegexMatches(reg, result);
 
-        return (result);
-     
+        return resolve(result);
+      } catch (e) {
+        logger.error(
+          'Error reading file: ',
+          target,
+          !CONST.VERBOSE ? 'ERROR' : e,
+        );
+        reject(e);
+      }
     } catch (e) {
       logger.error(
-        'Error reading file:',
+        'Error reading file: ',
         relativePath,
         !CONST.VERBOSE ? 'ERROR' : e.message,
       );
-      throw e;
+      reject(e);
     }
-  };
+  });
 
 export const previewFile = async (targetRelativePath: string, reg?: RegExp) => {
   const data = await readTextFile(targetRelativePath);
@@ -175,7 +182,7 @@ export const previewFile = async (targetRelativePath: string, reg?: RegExp) => {
       );
     }
   } else {
-    logger.log('Previewing file:', targetRelativePath);
+    logger.log('Previewing file: ', targetRelativePath);
     logger.log(text.italic(data));
   }
 };

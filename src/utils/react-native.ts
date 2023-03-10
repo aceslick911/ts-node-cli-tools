@@ -1,9 +1,16 @@
 import { runAsyncCommand } from '../utils/exec.js';
 
 import { logger } from '../utils/logger.js';
-import { regexReplaceInFile, writeTextFile } from '../utils/files.js';
+import {
+  readJSONFile,
+  regexReplaceInFile,
+  writeTextFile,
+} from '../utils/files.js';
 
 import { text } from '../utils/text.js';
+
+import { getRelativePath } from './utils.js';
+import { VendorSpecificValues } from '../consts.js';
 
 export type BuildWebParams = {
   platform: 'WEB';
@@ -13,15 +20,14 @@ export type BuildWebParams = {
   test?: boolean;
 };
 
-
 export interface ISetVersions {
   APP_VERSION: string;
   BUILD_NUMBER: number;
   LAST_RELEASE: string;
-  XCODE_PROJ?:string;
+  XCODE_PROJ?: string;
 }
 
-const buildArtifacts= {
+const buildArtifacts = {
   files: [
     '.well-known',
     'apple-app-site-association',
@@ -33,6 +39,30 @@ const buildArtifacts= {
     'serve.json',
     'static',
   ],
+};
+
+export const setVersions = async (versionOverrides?: ISetVersions) => {
+  try {
+    const packageJson = await readJSONFile(getRelativePath('package.json'));
+
+    const BUILD_NUMER = VendorSpecificValues.buildNumber;
+
+    const versionInfo = {
+      APP_VERSION: packageJson.version,
+      BUILD_NUMBER: BUILD_NUMER,
+
+      LAST_RELEASE: packageJson.version,
+
+      ...(versionOverrides || {}),
+    };
+
+    await updateProjectPbx(versionInfo);
+    await updateVersionJsonFile(versionInfo);
+    await updateAppJsonFile(versionInfo);
+  } catch (e) {
+    logger.error('setVersions error: ' + e);
+    throw e;
+  }
 };
 
 const runBuildWebZip = (updateProgress: (progress: string) => void) =>
@@ -49,9 +79,8 @@ const runBuildWebZip = (updateProgress: (progress: string) => void) =>
   });
 
 export const Actions = {
-
   // Delete the files
-  Delete_Existing_Zips: (zipFileName:string) =>
+  Delete_Existing_Zips: (zipFileName: string) =>
     logger.indented(text.strong('▶️  Delete_Existing_Zips'), () =>
       runAsyncCommand({
         title: 'Cleaning up any existing zip files..',
@@ -60,8 +89,6 @@ export const Actions = {
         args: ['-f', `./${zipFileName}`],
       }),
     ),
-
-
 
   // Run it!
   Run_Expo_Web_Build: (params: BuildWebParams, updateProgress) =>
@@ -81,21 +108,17 @@ export const Actions = {
     ),
 
   // Move the files
-  Move_To_Subfolder: async (params: BuildWebParams, ) =>
+  Move_To_Subfolder: async (params: BuildWebParams) =>
     await logger.indented(text.strong('▶️  Move_To_Subfolder'), () =>
       runAsyncCommand({
         title: 'Moving files to subfolder..',
         cwd: './web-build/',
         command: 'mv',
-        args: [
-          '-f',
-          ...buildArtifacts.files,
-          `.${params['root-folder']}`,
-        ],
+        args: ['-f', ...buildArtifacts.files, `.${params['root-folder']}`],
       }),
     ),
   // Zip the file
-  Zip_Folder: async (params: BuildWebParams,zipFileName:string) =>
+  Zip_Folder: async (params: BuildWebParams, zipFileName: string) =>
     await logger.indented(text.strong('▶️  Zip_Folder'), () =>
       runAsyncCommand({
         title: 'Zipping files..',
@@ -136,9 +159,7 @@ export const Actions = {
         command: 'cp',
         args: [
           '-rf',
-          ...buildArtifacts.files.map(
-            file => `${sourceDirectory}/${file}`,
-          ),
+          ...buildArtifacts.files.map(file => `${sourceDirectory}/${file}`),
           cloneDirectory,
         ],
       }),
@@ -189,14 +210,15 @@ export const Actions = {
   },
 };
 
-
 export type ISetVersionReplace = (_props: ISetVersions) => Promise<void>;
 
 /** Sets the marketing version in the project.pbxproj files to APP_VERSION */
-export const updateProjectPbx: ISetVersionReplace = async ({ APP_VERSION, XCODE_PROJ }) => {
+export const updateProjectPbx: ISetVersionReplace = async ({
+  APP_VERSION,
+  XCODE_PROJ,
+}) => {
   const prebuildFile = `./ios/${XCODE_PROJ}/project.pbxproj`;
-  const iosProjectFile =
-    `./assets/prebuild/ios/${XCODE_PROJ}.xcodeproj/project.pbxproj`;
+  const iosProjectFile = `./assets/prebuild/ios/${XCODE_PROJ}.xcodeproj/project.pbxproj`;
 
   const prebuildData = await regexReplaceInFile(
     prebuildFile,
